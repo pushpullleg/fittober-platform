@@ -10,6 +10,14 @@ const { Pool } = require('pg');
 const app = express();
 const port = process.env.PORT || 3000;
 
+function getDatabaseUrl() {
+  return process.env.DATABASE_URL
+    || process.env.SUPABASE_DATABASE_URL
+    || process.env.POSTGRES_URL
+    || process.env.POSTGRES_PRISMA_URL
+    || null;
+}
+
 // SendGrid Email Client (safe initialization)
 let sgMail = null;
 try {
@@ -29,11 +37,12 @@ try {
 // Guard creation so module import doesn't throw during Vercel build/runtime
 let pool = null;
 try {
-  if (!process.env.DATABASE_URL) {
-    console.warn('⚠️  DATABASE_URL not set - DB features will be disabled at runtime');
+  const databaseUrl = getDatabaseUrl();
+  if (!databaseUrl) {
+    console.warn('⚠️  Database URL not set - DB features will be disabled at runtime');
   } else {
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: databaseUrl,
       max: 1, // Limit to 1 connection for serverless environment
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
@@ -54,7 +63,7 @@ try {
 // Helper to run queries or fail with a clear error if DB is not configured
 async function dbQuery(queryText, params = []) {
   if (!pool) {
-    throw new Error('Database not configured (DATABASE_URL missing or pool failed to initialize)');
+    throw new Error('Database not configured (connection string missing or pool failed to initialize)');
   }
   return pool.query(queryText, params);
 }
@@ -263,7 +272,8 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     gists: GIST_URLS.length,
     environment: {
-      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      hasDatabaseUrl: !!getDatabaseUrl(),
+      databaseSource: process.env.DATABASE_URL ? 'DATABASE_URL' : process.env.SUPABASE_DATABASE_URL ? 'SUPABASE_DATABASE_URL' : process.env.POSTGRES_URL ? 'POSTGRES_URL' : process.env.POSTGRES_PRISMA_URL ? 'POSTGRES_PRISMA_URL' : 'missing',
       hasSendGridKey: !!process.env.SENDGRID_API_KEY,
       nodeEnv: process.env.NODE_ENV || 'not set'
     }
@@ -277,7 +287,8 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     gists: GIST_URLS.length,
     environment: {
-      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      hasDatabaseUrl: !!getDatabaseUrl(),
+      databaseSource: process.env.DATABASE_URL ? 'DATABASE_URL' : process.env.SUPABASE_DATABASE_URL ? 'SUPABASE_DATABASE_URL' : process.env.POSTGRES_URL ? 'POSTGRES_URL' : process.env.POSTGRES_PRISMA_URL ? 'POSTGRES_PRISMA_URL' : 'missing',
       hasSendGridKey: !!process.env.SENDGRID_API_KEY,
       nodeEnv: process.env.NODE_ENV || 'not set'
     }
