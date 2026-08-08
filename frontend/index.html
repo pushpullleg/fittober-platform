@@ -229,9 +229,11 @@
 
     <script>
         let chart = null;
-        const API_BASE_URL = window.location.origin.includes('github.io') 
+        const API_BASE_URL = window.location.hostname.includes('github.io') 
             ? 'https://fitness-tracker-flame-kappa.vercel.app/api'
-            : 'http://localhost:3001';
+            : window.location.hostname.includes('vercel.app')
+                ? `${window.location.origin}/api`
+                : 'http://localhost:3001';
 
         // College colors
         const COLORS = {

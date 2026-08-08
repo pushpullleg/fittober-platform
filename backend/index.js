@@ -270,6 +270,20 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Alias for deployments that route /api/* to the function without preserving the prefix.
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    gists: GIST_URLS.length,
+    environment: {
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      hasSendGridKey: !!process.env.SENDGRID_API_KEY,
+      nodeEnv: process.env.NODE_ENV || 'not set'
+    }
+  });
+});
+
 // Debug endpoint to test database connection
 app.get('/api/debug/db', async (req, res) => {
   try {
@@ -317,6 +331,38 @@ app.get('/aggregates.json', async (req, res) => {
       last_updated: new Date().toISOString()
     });
 
+  } catch (error) {
+    console.error('Error fetching aggregates:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: error.message 
+    });
+  }
+});
+
+app.get('/api/aggregates.json', async (req, res) => {
+  try {
+    const memberTotalsQuery = `
+      SELECT member as name, SUM(duration_min) as total_min 
+      FROM activities 
+      GROUP BY member 
+      ORDER BY total_min DESC
+    `;
+
+    const memberTotals = await dbQuery(memberTotalsQuery);
+
+    const overallTotalQuery = `
+      SELECT SUM(duration_min) as total_min 
+      FROM activities
+    `;
+
+    const overallTotal = await dbQuery(overallTotalQuery);
+
+    res.json({
+      members: memberTotals.rows,
+      total_min: overallTotal.rows[0].total_min || 0,
+      last_updated: new Date().toISOString()
+    });
   } catch (error) {
     console.error('Error fetching aggregates:', error);
     res.status(500).json({ 
@@ -482,6 +528,42 @@ app.get('/api/refresh', async (req, res) => {
   }
 });
 
+app.get('/refresh', async (req, res) => {
+  const startTime = Date.now();
+  try {
+    console.log('🔄 Manual refresh triggered (GET) at:', new Date().toISOString());
+    console.log('📍 Environment check:');
+    console.log('  - DATABASE_URL configured:', !!process.env.DATABASE_URL);
+    console.log('  - GIST_URLS count:', GIST_URLS.length);
+    
+    const result = await pollAllGists();
+    const duration = Date.now() - startTime;
+    
+    console.log(`✅ Refresh completed in ${duration}ms`);
+    
+    res.json({ 
+      success: true,
+      message: 'Data refreshed successfully',
+      timestamp: new Date().toISOString(),
+      duration: `${duration}ms`,
+      stats: result
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error('❌ Error during manual refresh:', error);
+    console.error('Stack trace:', error.stack);
+    console.error(`Failed after ${duration}ms`);
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to refresh data',
+      message: error.message,
+      duration: `${duration}ms`,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Webhook endpoint to receive GitHub Gist update notifications
 app.post('/api/webhook', async (req, res) => {
   const startTime = new Date();
@@ -524,6 +606,10 @@ app.post('/api/webhook', async (req, res) => {
  * GET/POST /api/send-digest
  */
 app.route('/api/send-digest')
+  .get(sendDigestHandler)
+  .post(sendDigestHandler);
+
+app.route('/send-digest')
   .get(sendDigestHandler)
   .post(sendDigestHandler);
 
