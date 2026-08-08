@@ -333,9 +333,12 @@ app.get('/aggregates.json', async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching aggregates:', error);
-    res.status(500).json({ 
-      error: 'Internal Server Error',
-      message: error.message 
+    res.json({
+      members: [],
+      total_min: 0,
+      last_updated: new Date().toISOString(),
+      warning: 'Database unavailable, showing empty dashboard',
+      error: error.message
     });
   }
 });
@@ -365,9 +368,12 @@ app.get('/api/aggregates.json', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching aggregates:', error);
-    res.status(500).json({ 
-      error: 'Internal Server Error',
-      message: error.message 
+    res.json({
+      members: [],
+      total_min: 0,
+      last_updated: new Date().toISOString(),
+      warning: 'Database unavailable, showing empty dashboard',
+      error: error.message
     });
   }
 });
